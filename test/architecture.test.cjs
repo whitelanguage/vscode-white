@@ -47,7 +47,7 @@ test("passes a validated White Language root to wlls", () => {
   assert.match(server, /managedServerPath/);
   assert.match(server, /depth < 6/);
   assert.match(server, /stat\(join\(path,\s*"std"\)\)/);
-  assert.match(server, /stat\(join\(path,\s*"runtime"\)\)/);
+  assert.doesNotMatch(server, /stat\(join\(path,\s*"runtime"\)\)/);
 });
 
 test("installs the latest tagged wlls release without a shell", () => {
@@ -55,7 +55,7 @@ test("installs the latest tagged wlls release without a shell", () => {
   assert.match(extension, /"Install wlls"/);
   assert.match(
     installer,
-    /https:\/\/github\.com\/pangbai520\/White-Language-LangServer\.git/,
+    /https:\/\/github\.com\/whitelanguage\/wlls\.git/,
   );
   assert.match(installer, /"ls-remote"/);
   assert.match(installer, /"refs\/tags\/v\*"/);

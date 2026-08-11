@@ -12,7 +12,7 @@ const grammar = JSON.parse(
 );
 
 test("uses the marketplace identity and bundled icons", () => {
-  assert.equal(manifest.version, "0.0.1");
+  assert.equal(manifest.version, "0.0.2");
   assert.equal(manifest.publisher, "whitelang-dev");
   assert.equal(manifest.icon, "./resources/icon.png");
 

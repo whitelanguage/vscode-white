@@ -17,7 +17,7 @@ import { latestReleaseTag } from "./releaseTags";
 import { findWhiteLanguageRoot, managedServerPath } from "./server";
 
 const repository =
-  "https://github.com/pangbai520/White-Language-LangServer.git";
+  "https://github.com/whitelanguage/wlls.git";
 const gitDownloadUrl = "https://git-scm.com/downloads";
 const whiteLanguageDownloadUrl = "https://www.white-lang.org";
 const maxCapturedOutput = 4 * 1024 * 1024;
@@ -52,7 +52,7 @@ async function installLatestServerOnce(
   const wlPath = await findWhiteLanguageRoot(compiler);
   if (!wlPath) {
     await offerDownload(
-      "The White Language installation root could not be found. Set WL_PATH to a directory containing std and runtime.",
+      "The White Language installation root could not be found. Set WL_PATH to a directory containing std.",
       "Download White Language",
       whiteLanguageDownloadUrl,
     );

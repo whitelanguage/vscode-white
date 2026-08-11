@@ -2,13 +2,13 @@
   "name": "white-language-vscode",
   "displayName": "White Lang",
   "description": "VSCode Extension for White Language, powered by wlls.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "whitelang-dev",
   "icon": "./resources/icon.png",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pangbai520/White-Language-Vscode.git"
+    "url": "https://github.com/whitelanguage/vscode-white.git"
   },
   "engines": {
     "vscode": "^1.91.0"

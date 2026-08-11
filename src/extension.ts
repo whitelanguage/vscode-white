@@ -44,7 +44,7 @@ export async function activate(
   const wlPath = await findWhiteLanguageRoot(executable);
   if (!wlPath) {
     void vscode.window.showErrorMessage(
-      "White Language language features are unavailable because the installation root could not be found. Set WL_PATH to a directory containing std and runtime.",
+      "White Language language features are unavailable because the installation root could not be found. Set WL_PATH to a directory containing std.",
     );
     return;
   }

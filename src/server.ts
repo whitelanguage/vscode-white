@@ -75,11 +75,8 @@ export function formatError(error: unknown): string {
 
 async function isWhiteLanguageRoot(path: string): Promise<boolean> {
   try {
-    const [standardLibrary, runtime] = await Promise.all([
-      stat(join(path, "std")),
-      stat(join(path, "runtime")),
-    ]);
-    return standardLibrary.isDirectory() && runtime.isDirectory();
+    const standardLibrary = await stat(join(path, "std"));
+    return standardLibrary.isDirectory();
   } catch {
     return false;
   }
