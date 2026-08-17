@@ -45,6 +45,8 @@ test("passes a validated White Language root to wlls", () => {
   assert.match(extension, /options:\s*\{[\s\S]*env:\s*\{/);
   assert.match(extension, /WL_PATH:\s*wlPath/);
   assert.match(server, /managedServerPath/);
+  assert.match(server, /findManagedServer/);
+  assert.match(server, /metadata\.executable/);
   assert.match(server, /depth < 6/);
   assert.match(server, /stat\(join\(path,\s*"std"\)\)/);
   assert.doesNotMatch(server, /stat\(join\(path,\s*"runtime"\)\)/);
@@ -53,10 +55,7 @@ test("passes a validated White Language root to wlls", () => {
 test("installs the latest tagged wlls release without a shell", () => {
   assert.match(extension, /installLatestServer/);
   assert.match(extension, /"Install wlls"/);
-  assert.match(
-    installer,
-    /https:\/\/github\.com\/whitelanguage\/wlls\.git/,
-  );
+  assert.match(installer, /https:\/\/github\.com\/whitelanguage\/wlls\.git/);
   assert.match(installer, /"ls-remote"/);
   assert.match(installer, /"refs\/tags\/v\*"/);
   assert.match(installer, /"--depth",\s*"1"/);
@@ -71,10 +70,35 @@ test("installs the latest tagged wlls release without a shell", () => {
   assert.match(installer, /"Retry"/);
   assert.match(installer, /recursive:\s*true,\s*force:\s*true/);
   assert.match(installer, /tools",\s*"wlls",\s*"bin"/);
+  assert.match(installer, /managedServerPath\(wlPath, tag\)/);
+  assert.match(installer, /executable:\s*basename\(target\)/);
   assert.match(
     compiler,
     /getConfiguration\("whitelanguage"\)[\s\S]*"compiler\.path"/,
   );
+});
+
+test("checks managed wlls installations for updates", () => {
+  assert.match(extension, /updateManagedServer\(executable, wlPath, output\)/);
+  assert.match(installer, /version\.json/);
+  assert.match(installer, /server\.checkForUpdates/);
+  assert.doesNotMatch(installer, /lastUpdateCheckKey|updateCheckInterval/);
+  assert.match(installer, /isNewerReleaseTag/);
+  assert.match(installer, /"Update wlls"/);
+  assert.match(installer, /"Retry"/);
+  assert.match(installer, /"Cancel"/);
+  assert.match(installer, /const updateCheckTimeout = 15_000/);
+});
+
+test("keeps running wlls versions until they can be cleaned safely", () => {
+  assert.match(
+    extension,
+    /cleanupManagedServers\(wlPath, executable, output\)/,
+  );
+  assert.match(installer, /cleanupManagedServers/);
+  assert.match(installer, /!samePath\(currentExecutable, managed\)/);
+  assert.match(installer, /versionedPattern/);
+  assert.doesNotMatch(installer, /await rm\(target, \{ force: true \}\);/);
 });
 
 test("preserves cached diagnostics only in non-open-file modes", () => {
@@ -93,4 +117,9 @@ test("removes temporary run executables", () => {
   assert.match(runner, /cleanupRunDirectory\(context, output\)/);
   assert.match(runner, /rm\(runDirectory,[\s\S]*recursive:\s*true/);
   assert.match(runner, /finally\s*\{[\s\S]*removeRunArtifact\(executable\)/);
+});
+
+test("reuses one terminal for compile and run tasks", () => {
+  assert.match(runner, /panel:\s*vscode\.TaskPanelKind\.Shared/);
+  assert.match(runner, /showReuseMessage:\s*false/);
 });

@@ -189,9 +189,10 @@ function createTask(
   );
   task.presentationOptions = {
     reveal: vscode.TaskRevealKind.Always,
-    panel: vscode.TaskPanelKind.Dedicated,
+    panel: vscode.TaskPanelKind.Shared,
     clear,
     focus: !clear,
+    showReuseMessage: false,
   };
   return task;
 }

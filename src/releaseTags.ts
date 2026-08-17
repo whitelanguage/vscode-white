@@ -26,6 +26,15 @@ export function latestReleaseTag(refs: string): string | undefined {
   return latest?.name;
 }
 
+export function isNewerReleaseTag(
+  candidateName: string,
+  currentName: string,
+): boolean {
+  const candidate = parseReleaseTag(candidateName);
+  const current = parseReleaseTag(currentName);
+  return !!candidate && !!current && compareReleaseTags(candidate, current) > 0;
+}
+
 function parseReleaseTag(name: string): ReleaseTag | undefined {
   const match = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(name);
   if (!match) {

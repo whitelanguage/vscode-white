@@ -17,7 +17,7 @@ loaded.filename = source;
 loaded.paths = Module._nodeModulePaths(dirname(source));
 loaded._compile(output, source);
 
-const { latestReleaseTag } = loaded.exports;
+const { isNewerReleaseTag, latestReleaseTag } = loaded.exports;
 
 test("selects the newest numeric v* tag", () => {
   const refs = [
@@ -40,4 +40,11 @@ test("ignores branches, prereleases, and malformed tags", () => {
   ].join("\n");
   assert.equal(latestReleaseTag(refs), "v3.0.4");
   assert.equal(latestReleaseTag("a\trefs/tags/not-a-version"), undefined);
+});
+
+test("compares installed and available release tags", () => {
+  assert.equal(isNewerReleaseTag("v2.0", "v1.9.9"), true);
+  assert.equal(isNewerReleaseTag("v1.9.9", "v2.0"), false);
+  assert.equal(isNewerReleaseTag("v2.0", "v2.0"), false);
+  assert.equal(isNewerReleaseTag("latest", "v2.0"), false);
 });

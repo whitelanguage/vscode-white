@@ -211,6 +211,12 @@
           "scope": "window",
           "description": "Log wlls protocol traffic in the White Language output channel."
         },
+        "whitelanguage.server.checkForUpdates": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for updates to a managed wlls installation whenever the extension starts."
+        },
         "whitelanguage.compiler.path": {
           "type": "string",
           "default": "",

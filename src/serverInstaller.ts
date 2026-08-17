@@ -4,23 +4,30 @@ import {
   copyFile,
   mkdir,
   mkdtemp,
+  readdir,
   rename,
+  readFile,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 import { findCompiler } from "./compiler";
-import { latestReleaseTag } from "./releaseTags";
-import { findWhiteLanguageRoot, managedServerPath } from "./server";
+import { isExecutableFile } from "./executable";
+import { isNewerReleaseTag, latestReleaseTag } from "./releaseTags";
+import {
+  findManagedServer,
+  findWhiteLanguageRoot,
+  managedServerPath,
+} from "./server";
 
-const repository =
-  "https://github.com/whitelanguage/wlls.git";
+const repository = "https://github.com/whitelanguage/wlls.git";
 const gitDownloadUrl = "https://git-scm.com/downloads";
 const whiteLanguageDownloadUrl = "https://www.white-lang.org";
 const maxCapturedOutput = 4 * 1024 * 1024;
+const updateCheckTimeout = 15_000;
 
 let currentInstallation: Promise<string | undefined> | undefined;
 
@@ -34,6 +41,80 @@ export function installLatestServer(
     currentInstallation = undefined;
   });
   return currentInstallation;
+}
+
+export async function updateManagedServer(
+  executable: string,
+  wlPath: string,
+  output: vscode.OutputChannel,
+): Promise<string> {
+  const updatesEnabled = vscode.workspace
+    .getConfiguration("whitelanguage")
+    .get<boolean>("server.checkForUpdates", true);
+  const managed = await findManagedServer(wlPath);
+  if (!updatesEnabled || !managed || !samePath(executable, managed)) {
+    return executable;
+  }
+
+  const metadataPath = join(wlPath, "tools", "wlls", "version.json");
+  let installedVersion: string;
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+      version?: unknown;
+    };
+    if (typeof metadata.version !== "string") {
+      return executable;
+    }
+    installedVersion = metadata.version;
+  } catch {
+    return executable;
+  }
+
+  let latestVersion: string | undefined;
+  while (!latestVersion) {
+    const args = ["ls-remote", "--tags", "--refs", repository, "refs/tags/v*"];
+    const result = await runCommand(
+      "git",
+      args,
+      undefined,
+      undefined,
+      gitEnvironment(),
+      updateCheckTimeout,
+    );
+    if (!result.startError && result.exitCode === 0) {
+      latestVersion = latestReleaseTag(result.stdout);
+    }
+    if (latestVersion) {
+      break;
+    }
+
+    output.appendLine(
+      `wlls update check failed: ${formatFailure("git", args, result)}`,
+    );
+    const action = await vscode.window.showWarningMessage(
+      "White Language could not check for wlls updates. Check your network connection and Git installation.",
+      "Retry",
+      "Cancel",
+    );
+    if (action !== "Retry") {
+      return executable;
+    }
+  }
+
+  if (!isNewerReleaseTag(latestVersion, installedVersion)) {
+    return executable;
+  }
+
+  const action = await vscode.window.showInformationMessage(
+    `White Language language server ${latestVersion} is available (installed: ${installedVersion}).`,
+    "Update wlls",
+    "Not Now",
+  );
+  if (action !== "Update wlls") {
+    return executable;
+  }
+
+  return (await installLatestServer(output)) ?? executable;
 }
 
 async function installLatestServerOnce(
@@ -140,7 +221,7 @@ async function installLatestServerOnce(
           { ...process.env, WL_PATH: wlPath },
         );
 
-        const target = managedServerPath(wlPath);
+        const target = managedServerPath(wlPath, tag);
         const targetDirectory = join(wlPath, "tools", "wlls", "bin");
         await mkdir(targetDirectory, { recursive: true });
         stagedInstall = join(
@@ -151,8 +232,14 @@ async function installLatestServerOnce(
         if (process.platform !== "win32") {
           await chmod(stagedInstall, 0o755);
         }
-        await rm(target, { force: true });
-        await rename(stagedInstall, target);
+        try {
+          await rename(stagedInstall, target);
+        } catch (error) {
+          if (!(await isExecutableFile(target))) {
+            throw error;
+          }
+          await rm(stagedInstall, { force: true });
+        }
         stagedInstall = undefined;
 
         const metadataPath = join(wlPath, "tools", "wlls", "version.json");
@@ -162,6 +249,7 @@ async function installLatestServerOnce(
           `${JSON.stringify(
             {
               version: tag,
+              executable: basename(target),
               repository,
               installedAt: new Date().toISOString(),
             },
@@ -223,6 +311,50 @@ async function installLatestServerOnce(
     output.show(true);
   }
   return undefined;
+}
+
+export async function cleanupManagedServers(
+  wlPath: string,
+  currentExecutable: string,
+  output: vscode.OutputChannel,
+): Promise<void> {
+  const managed = await findManagedServer(wlPath);
+  if (!managed || !samePath(currentExecutable, managed)) {
+    return;
+  }
+
+  const directory = join(wlPath, "tools", "wlls", "bin");
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  const current = normalizedPath(currentExecutable);
+  const versionedPattern =
+    process.platform === "win32"
+      ? /^wlls-v\d+(?:\.\d+){0,2}\.exe$/
+      : /^wlls-v\d+(?:\.\d+){0,2}$/;
+  const legacyName = process.platform === "win32" ? "wlls.exe" : "wlls";
+
+  for (const entry of entries) {
+    if (
+      !entry.isFile() ||
+      (entry.name !== legacyName && !versionedPattern.test(entry.name))
+    ) {
+      continue;
+    }
+    const candidate = join(directory, entry.name);
+    if (normalizedPath(candidate) === current) {
+      continue;
+    }
+    await rm(candidate, { force: true }).catch((error: unknown) => {
+      output.appendLine(
+        `could not remove old wlls ${candidate}: ${formatUnknownError(error)}`,
+      );
+    });
+  }
 }
 
 async function createStagingDirectory(): Promise<string> {
@@ -308,11 +440,13 @@ function runCommand(
   token?: vscode.CancellationToken,
   cwd?: string,
   env?: NodeJS.ProcessEnv,
+  timeoutMs?: number,
 ): Promise<CommandResult> {
   return new Promise<CommandResult>((resolveCommand) => {
     let stdout = "";
     let stderr = "";
     let cancelled = false;
+    let timedOut = false;
     let settled = false;
     const child = spawn(command, args, {
       cwd,
@@ -325,6 +459,19 @@ function runCommand(
       cancelled = true;
       child.kill();
     });
+    const timeout = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, timeoutMs)
+      : undefined;
+
+    const finish = (): void => {
+      cancellation?.dispose();
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    };
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout = appendOutput(stdout, chunk.toString("utf8"));
@@ -337,7 +484,7 @@ function runCommand(
         return;
       }
       settled = true;
-      cancellation?.dispose();
+      finish();
       resolveCommand({
         exitCode: null,
         stdout,
@@ -350,13 +497,22 @@ function runCommand(
         return;
       }
       settled = true;
-      cancellation?.dispose();
+      finish();
       if (cancelled) {
         resolveCommand({
           exitCode,
           stdout,
           stderr,
           startError: new InstallationCancelled(),
+        });
+        return;
+      }
+      if (timedOut) {
+        resolveCommand({
+          exitCode,
+          stdout,
+          stderr,
+          startError: new Error(`Command timed out after ${timeoutMs} ms.`),
         });
         return;
       }
@@ -398,6 +554,19 @@ function gitEnvironment(): NodeJS.ProcessEnv {
     ...process.env,
     GIT_TERMINAL_PROMPT: "0",
   };
+}
+
+function samePath(left: string, right: string): boolean {
+  return normalizedPath(left) === normalizedPath(right);
+}
+
+function normalizedPath(path: string): string {
+  const resolved = resolve(path);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 class InstallationCancelled extends Error {

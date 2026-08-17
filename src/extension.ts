@@ -8,7 +8,11 @@ import {
 } from "vscode-languageclient/node";
 import { DiagnosticPolicy } from "./diagnosticPolicy";
 import { findServer, findWhiteLanguageRoot, formatError } from "./server";
-import { installLatestServer } from "./serverInstaller";
+import {
+  cleanupManagedServers,
+  installLatestServer,
+  updateManagedServer,
+} from "./serverInstaller";
 import { registerRunner } from "./runner";
 
 let client: LanguageClient | undefined;
@@ -22,6 +26,7 @@ export async function activate(
   context.subscriptions.push(output, registerRunner(context, output));
 
   let executable = await findServer();
+  let installedNow = false;
   if (!executable) {
     const action = await vscode.window.showWarningMessage(
       "White Language language server was not found. Install the latest wlls release now?",
@@ -30,6 +35,7 @@ export async function activate(
     );
     if (action === "Install wlls") {
       executable = await installLatestServer(output);
+      installedNow = !!executable;
     } else if (action === "Open Settings") {
       await vscode.commands.executeCommand(
         "workbench.action.openSettings",
@@ -47,6 +53,9 @@ export async function activate(
       "White Language language features are unavailable because the installation root could not be found. Set WL_PATH to a directory containing std.",
     );
     return;
+  }
+  if (!installedNow) {
+    executable = await updateManagedServer(executable, wlPath, output);
   }
 
   const diagnostics = new DiagnosticPolicy();
@@ -131,6 +140,7 @@ export async function activate(
 
   output.appendLine(`White Language language server ready (${executable})`);
   output.appendLine(`WL_PATH: ${wlPath}`);
+  void cleanupManagedServers(wlPath, executable, output);
 }
 
 export async function deactivate(): Promise<void> {

@@ -113,6 +113,15 @@ test("offers all three diagnostic modes without changing the default behavior", 
   assert.match(setting.enumDescriptions[0], /server/i);
 });
 
+test("checks managed wlls installations for updates by default", () => {
+  const setting =
+    manifest.contributes.configuration.properties[
+      "whitelanguage.server.checkForUpdates"
+    ];
+  assert.equal(setting.type, "boolean");
+  assert.equal(setting.default, true);
+});
+
 test("loads the fallback grammar as source.whitelang", () => {
   assert.equal(grammar.scopeName, "source.whitelang");
   assert(grammar.patterns.length > 0);

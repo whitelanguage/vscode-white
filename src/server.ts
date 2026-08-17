@@ -1,5 +1,5 @@
-import { stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import * as vscode from "vscode";
 import { findCompiler } from "./compiler";
 import { isExecutableFile, resolveConfiguredPath } from "./executable";
@@ -19,7 +19,10 @@ export async function findServer(): Promise<string | undefined> {
   const wlPath = process.env.WL_PATH;
   if (wlPath) {
     candidates.push(join(wlPath, "bin", executableName));
-    candidates.push(managedServerPath(resolve(wlPath)));
+    const managed = await findManagedServer(resolve(wlPath));
+    if (managed) {
+      candidates.push(managed);
+    }
   }
 
   const compiler = await findCompiler();
@@ -27,7 +30,10 @@ export async function findServer(): Promise<string | undefined> {
     const compilerRoot = await findWhiteLanguageRoot(compiler);
     if (compilerRoot) {
       candidates.push(join(compilerRoot, "bin", executableName));
-      candidates.push(managedServerPath(compilerRoot));
+      const managed = await findManagedServer(compilerRoot);
+      if (managed) {
+        candidates.push(managed);
+      }
     }
   }
 
@@ -64,9 +70,41 @@ export async function findWhiteLanguageRoot(
   return undefined;
 }
 
-export function managedServerPath(wlPath: string): string {
-  const executableName = process.platform === "win32" ? "wlls.exe" : "wlls";
+export function managedServerPath(wlPath: string, version?: string): string {
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const executableName = version ? `wlls-${version}${suffix}` : `wlls${suffix}`;
   return join(wlPath, "tools", "wlls", "bin", executableName);
+}
+
+export async function findManagedServer(
+  wlPath: string,
+): Promise<string | undefined> {
+  const metadataPath = join(wlPath, "tools", "wlls", "version.json");
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+      executable?: unknown;
+    };
+    if (
+      typeof metadata.executable === "string" &&
+      basename(metadata.executable) === metadata.executable
+    ) {
+      const candidate = join(
+        wlPath,
+        "tools",
+        "wlls",
+        "bin",
+        metadata.executable,
+      );
+      if (await isExecutableFile(candidate)) {
+        return candidate;
+      }
+    }
+  } catch {
+    // installations made before versioned binaries have no executable field
+  }
+
+  const legacy = managedServerPath(wlPath);
+  return (await isExecutableFile(legacy)) ? legacy : undefined;
 }
 
 export function formatError(error: unknown): string {
